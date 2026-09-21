@@ -1,76 +1,49 @@
-# REIS AI AUTONOMOUS AGENT
+# REIS AI ULTRA
 
-Yerel Ollama uzerinde calisan, Windows 11 uyumlu otonom yazilim gelistirme ajani.
+Yerel **Ollama** üzerinde çalışan, Windows 11 uyumlu, self-evolution’lı otonom ajan.
 
-## REIS AI MAX
+**Repo:** https://github.com/hecebir-ux/reis-ai-agent
 
-`start.bat` veya `python main.py` ile MAX ortamini acin. Eski v2 girisi: `python agent.py`.
+## Hızlı başlat
 
-Yeni katmanlar: SQLite bellek, model router, intent, gorev kuyrugu, guvenlik, local API, plugin iskeleti, self-debug.
-
-```
-python tests/test_reis_max.py
-python tests/REIS_OTOMATIK_TEST.py
+```bat
+setup.bat
+start.bat
 ```
 
+Arayüz: http://127.0.0.1:8765/
 
-## Ozellikler
+EXE: `build_app.bat` → `dist\REIS_AI\REIS_AI.exe`
 
-- Kendi kendine plan yapar
-- Dosya ve klasor olusturur
-- Terminal komutlari calistirir (python, pip, git, npm vb.)
-- Kod yazar
-- Test eder
-- Hatalari analiz edip otomatik duzeltir
-- Gorev bellegi tutar (JSON)
-- Web arastirmasi yapar (beyaz listedeki resmi siteler)
+Telegram: `.env` içine `TELEGRAM_BOT_TOKEN=...` → `start_telegram.bat` veya `REIS_AI.exe --telegram`
 
-## Kullanim
+## ULTRA donanım
 
+| Modül | Ne yapar |
+|---|---|
+| Self Diagnostics | Kod tabanı tarama |
+| Self Healing | Hata → patch → test → retry (max 3) / rollback |
+| Self Evolver | Backup → syntax → test → commit / rollback |
+| Feature Builder | Eksik yetenek (örn. desktop organizer) |
+| Optimizer + Benchmark | Performans ölç / gerilemede reddet |
+| Reviewer | İkinci geçiş kod inceleme |
+| Model Router | FAST / CODING / ANALYSIS / VISION |
+| Web Research | Local-first, resmi docs |
+| Knowledge Memory | SQLite problem→çözüm |
+| Security + Safe Update | SAFE / CAUTION / DANGEROUS |
+| Project Mapper + Task State | Harita + restart resume |
+| Web Command Center | Premium UI |
+| Telegram Bot | Doğal dil + /evolve |
+| Windows EXE | PyInstaller paketi |
+
+## Test
+
+```bat
+.venv\Scripts\python.exe tests\test_self_evolution.py
 ```
-setup.bat    (ilk kez - paketleri kurar)
-start.bat    (ajani baslatir)
-```
 
-Ajan acildiktan sonra ornek:
+## Güvenlik
 
-```
-REIS AI > Telegram müzik botu yap
-REIS AI > Flask ile todo app yap
-REIS AI > Python'da fibonacci hesaplayici yaz ve test et
-```
-
-## Yapilandirma
-
-`.env` dosyasindan ayarlanabilir:
-
-- `OLLAMA_BASE_URL` : Ollama API adresi (varsayilan http://127.0.0.1:11434)
-- `OLLAMA_MODEL`    : Kullanilacak model (varsayilan qwen2.5-coder)
-- `MAX_ITERATIONS`  : Maksimum dongu sayisi
-- `MAX_DEBUG_ATTEMPTS` : Her hata icin maksimum deneme
-
-## Klasorler
-
-```
-REIS_AI_AGENT/
-├── agent.py          - Ana giris noktasi
-├── config.py         - Yapilandirma
-├── core/
-│   ├── planner.py    - Planlayici
-│   ├── executor.py   - Yurutucu dongu
-│   ├── coder.py      - Kod uretici
-│   ├── tester.py     - Test motoru
-│   ├── debugger.py   - Otomatik hata duzeltici
-│   ├── memory.py     - Gorev bellegi (JSON)
-│   └── llm_client.py - Ollama API istemcisi
-├── tools/
-│   ├── terminal.py   - Komut calistirici
-│   ├── filesystem.py - Dosya islemleri
-│   ├── python_tool.py - Python/pip yardimcisi
-│   └── web_tool.py   - Web arastirma
-├── workspace/        - Uretilen projeler burada
-├── memory/           - Gorev gecmisi JSON
-├── logs/             - Gunlukler
-├── setup.bat         - Kurulum betigi
-└── start.bat         - Baslatma betigi
-```
+- `.env` asla commit edilmez
+- Token / secret koda yazılmaz
+- Sistem klasörleri yazmaya kapalı

@@ -93,7 +93,7 @@ if not exist ".venv\Scripts\python.exe" (
 
 echo.
 echo ============================================================
-echo   REIS AI MAX + SELF-EVOLUTION + UI BASLATILIYOR...
+echo   REIS AI ULTRA — UI + SELF-EVOLUTION + TELEGRAM
 echo   Arayuz: http://127.0.0.1:8765/
 echo ============================================================
 echo.

@@ -1,9 +1,8 @@
-"""Local REIS AI web UI — no IDE required, opens in browser."""
+"""REIS AI ULTRA — premium local web console (no IDE required)."""
 from __future__ import annotations
 
 import json
 import threading
-import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -18,6 +17,7 @@ from core.metrics import metrics
 from core.model_router.router import ModelRouter
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
+VERSION = "ULTRA-1.0"
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -27,6 +27,21 @@ MIME = {
     ".ico": "image/x-icon",
 }
 
+KIT = [
+    "Self Diagnostics / Healing / Evolver",
+    "Feature Builder + Auto Patcher",
+    "Optimizer + Benchmark + Reviewer",
+    "Model Router (4 Ollama roles)",
+    "Web Research (local-first)",
+    "Knowledge Memory (SQLite)",
+    "Security Auditor + Safe Auto-Update",
+    "Project Mapper + Task Resume",
+    "Desktop Organizer",
+    "Telegram Bot bridge",
+    "Web Command Center UI",
+    "Windows EXE package",
+]
+
 
 class UiApp:
     def __init__(self, llm: OllamaClient | None = None):
@@ -35,6 +50,7 @@ class UiApp:
         self.boot_status: dict[str, Any] = {}
         self._lock = threading.Lock()
         self.router = ModelRouter(self.llm)
+        self._last_diag: dict[str, Any] = {}
 
     def boot(self) -> dict[str, Any]:
         with self._lock:
@@ -46,6 +62,39 @@ class UiApp:
             metrics.record_startup(float(self.boot_status.get("elapsed_s") or 0))
             return self.boot_status
 
+    def diagnose(self) -> dict[str, Any]:
+        from core.evolution.self_diagnostics import SelfDiagnostics
+        from core.evolution.security_auditor import SecurityAuditor
+
+        d = SelfDiagnostics().scan()
+        sec = SecurityAuditor().audit()
+        out = {
+            "python_files": (d.get("stats") or {}).get("python_files"),
+            "problems": len(d.get("problems") or []),
+            "test_gaps": len(d.get("test_gaps") or []),
+            "security": sec.get("count"),
+            "missing": d.get("missing_capabilities") or [],
+            "recommendations": d.get("recommendations") or [],
+            "ok": True,
+        }
+        self._last_diag = out
+        return out
+
+    def evolve(self) -> dict[str, Any]:
+        with self._lock:
+            out = self.agent.evolution.run(
+                "Kendini analiz et, eksiklerini bul, daha hızlı ve daha sağlam hale gel, "
+                "gerekli özellikleri geliştir, güncel teknik bilgileri kontrol et, "
+                "değişiklikleri test et ve çalışan değişiklikleri uygula.",
+                resume=False,
+            )
+            return {
+                "ok": bool(out.get("ok")),
+                "kind": "evolution",
+                "message": out.get("message") or "",
+                "data": out.get("data"),
+            }
+
     def handle_message(self, text: str) -> dict[str, Any]:
         raw = (text or "").strip()
         if not raw:
@@ -56,15 +105,14 @@ class UiApp:
                 self.boot_status = st
                 return {"ok": True, "kind": "boot", "message": format_boot_report(st)}
             if raw.lower() in {"/diagnose", "diagnose"}:
-                from core.evolution.self_diagnostics import SelfDiagnostics
-
-                d = SelfDiagnostics().scan()
+                d = self.diagnose()
                 msg = (
-                    f"Tarama: {(d.get('stats') or {}).get('python_files')} dosya, "
-                    f"{len(d.get('problems') or [])} sorun.\n"
-                    + "\n".join(f"- {r}" for r in (d.get("recommendations") or [])[:6])
+                    f"Tarama: {d.get('python_files')} dosya, {d.get('problems')} sorun.\n"
+                    + "\n".join(f"- {r}" for r in (d.get("recommendations") or [])[:8])
                 )
                 return {"ok": True, "kind": "diagnose", "message": msg, "data": d}
+            if raw.lower() in {"/evolve", "evolve"}:
+                return self.evolve()
             out = self.agent.handle(raw)
             return {
                 "ok": bool(out.get("ok")),
@@ -76,17 +124,40 @@ class UiApp:
     def status(self) -> dict[str, Any]:
         h = self.llm.health_check()
         models = {}
-        for role in ("FAST", "CODING", "ANALYSIS", "VISION", "CHAT"):
+        for role in ("FAST", "CODING", "ANALYSIS", "VISION", "CHAT", "REVIEW"):
             models[role] = (self.router.resolve(role) or {}).get("model")
         boot = self.boot_status or {}
+        snap = metrics.snapshot()
+        projects = []
+        tasks = []
+        try:
+            for p in (self.agent.store.list_projects() or [])[:8]:
+                projects.append(f"{p.get('name')} · {p.get('path')}")
+            for t in (self.agent.store.list_tasks() or [])[:8]:
+                tasks.append(f"[{t.get('status')}] {t.get('title')}")
+        except Exception:
+            pass
+        token = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
         return {
             "brand": "REIS AI",
+            "version": VERSION,
+            "edition": "ULTRA",
             "ollama_ok": bool(h.get("ok")),
             "models": models,
             "evolution_active": boot.get("active_count") or 0,
             "evolution_total": boot.get("total_count") or 0,
-            "startup_s": metrics.snapshot().get("startup_s"),
+            "systems": boot.get("systems") or {},
+            "startup_s": snap.get("startup_s"),
+            "cpu": snap.get("cpu"),
+            "ram": snap.get("ram"),
+            "error_rate": snap.get("error_rate"),
+            "avg_ollama_s": snap.get("avg_ollama_s"),
             "workspace": str(config.WORKSPACE_DIR),
+            "kit": KIT,
+            "telegram_configured": bool(token) and ":" in token,
+            "projects": projects,
+            "tasks": tasks,
+            "diagnostics": self._last_diag or boot.get("diagnostics") or {},
         }
 
 
@@ -104,7 +175,7 @@ def make_handler(app: UiApp):
             self.wfile.write(body)
 
         def _json(self, code: int, payload: dict) -> None:
-            data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            data = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
             self._send(code, data, "application/json; charset=utf-8")
 
         def _read_json(self) -> dict:
@@ -119,8 +190,7 @@ def make_handler(app: UiApp):
         def do_GET(self):
             path = urlparse(self.path).path
             if path in {"/", "/index.html"}:
-                file = WEB_DIR / "index.html"
-                self._send(200, file.read_bytes(), MIME[".html"])
+                self._send(200, (WEB_DIR / "index.html").read_bytes(), MIME[".html"])
                 return
             if path.startswith("/static/"):
                 name = path[len("/static/") :]
@@ -141,6 +211,12 @@ def make_handler(app: UiApp):
             if path == "/api/boot":
                 self._json(200, {"ok": True, "message": format_boot_report(app.boot()), "data": app.boot_status})
                 return
+            if path == "/api/diagnose":
+                self._json(200, app.diagnose())
+                return
+            if path == "/api/kit":
+                self._json(200, {"kit": KIT, "version": VERSION})
+                return
             self._json(404, {"error": "not found"})
 
         def do_POST(self):
@@ -157,6 +233,15 @@ def make_handler(app: UiApp):
                 st = app.boot()
                 self._json(200, {"ok": True, "message": format_boot_report(st), "data": st})
                 return
+            if path == "/api/evolve":
+                try:
+                    self._json(200, app.evolve())
+                except Exception as e:
+                    self._json(500, {"ok": False, "message": str(e)})
+                return
+            if path == "/api/diagnose":
+                self._json(200, app.diagnose())
+                return
             self._json(404, {"error": "not found"})
 
     return Handler
@@ -171,12 +256,16 @@ def run_ui(
     host = host or getattr(config, "UI_HOST", "127.0.0.1")
     port = int(port or getattr(config, "UI_PORT", 8765))
     app = UiApp(llm=llm)
-    print("[UI] Self-Evolution boot...")
+    print(f"[UI] REIS AI {VERSION} boot...")
     st = app.boot()
     print(format_boot_report(st))
+    try:
+        app.diagnose()
+    except Exception:
+        pass
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
     url = f"http://{host}:{port}/"
-    print(f"[UI] REIS AI arayüzü: {url}")
+    print(f"[UI] ULTRA Command Center: {url}")
     if open_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:

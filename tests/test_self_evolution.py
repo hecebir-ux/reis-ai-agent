@@ -203,6 +203,9 @@ def run() -> None:
     ui = UiApp()
     st = ui.status()
     check("UI status payload", st.get("brand") == "REIS AI")
+    check("UI ULTRA edition", st.get("edition") == "ULTRA" and isinstance(st.get("kit"), list) and len(st.get("kit") or []) >= 8)
+    diag = ui.diagnose()
+    check("UI diagnose API", diag.get("ok") and "python_files" in diag)
 
     from core.telegram_bot import TelegramBot
     bot = TelegramBot(token="", handler=lambda t, m: "ok")

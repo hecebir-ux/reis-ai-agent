@@ -3,78 +3,137 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>REIS AI</title>
+  <title>REIS AI ULTRA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <div class="bg-grid" aria-hidden="true"></div>
-  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="atmosphere" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="grain"></div>
+  </div>
 
-  <div class="shell">
+  <section class="splash" id="splash">
+    <p class="splash-kicker">Local · Windows 11 · Ollama · Self-Evolution</p>
+    <h1 class="splash-brand">REIS AI</h1>
+    <p class="splash-line">Ultra premium autonomous operating environment</p>
+    <button type="button" class="splash-cta" id="enterBtn">Konsola gir</button>
+  </section>
+
+  <div class="cockpit hidden" id="cockpit">
     <aside class="rail">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true"></div>
+      <div class="brand-block">
+        <div class="mark" aria-hidden="true"></div>
         <div>
-          <h1 class="brand-name">REIS AI</h1>
-          <p class="brand-tag">Local Autonomous Agent</p>
+          <div class="brand-row">
+            <h1 class="brand">REIS AI</h1>
+            <span class="badge">ULTRA</span>
+          </div>
+          <p class="tag">Full-stack local agent</p>
         </div>
       </div>
 
-      <nav class="actions" aria-label="Hızlı işlemler">
-        <button type="button" class="act" data-cmd="Kendini analiz et, eksiklerini bul, daha hızlı ve daha sağlam hale gel, gerekli özellikleri geliştir, güncel teknik bilgileri kontrol et, değişiklikleri test et ve çalışan değişiklikleri uygula.">
-          <span class="act-k">Evolve</span>
-          <span class="act-d">Kendini geliştir</span>
-        </button>
-        <button type="button" class="act" data-cmd="Kendini analiz et.">
-          <span class="act-k">Diagnose</span>
-          <span class="act-d">Kodunu tara</span>
-        </button>
-        <button type="button" class="act" data-cmd="/boot">
-          <span class="act-k">Boot</span>
-          <span class="act-d">Sistemleri aç</span>
-        </button>
-        <button type="button" class="act" data-cmd="Daha hızlı cevap ver.">
-          <span class="act-k">Faster</span>
-          <span class="act-d">Hız modeli</span>
-        </button>
-        <button type="button" class="act" data-cmd="Masaüstümü düzenle.">
-          <span class="act-k">Desktop</span>
-          <span class="act-d">Düzenle (dry-run)</span>
-        </button>
-        <button type="button" class="act" data-cmd="Bilgisayarımı kontrol et.">
-          <span class="act-k">System</span>
-          <span class="act-d">Ortam raporu</span>
-        </button>
+      <nav class="nav" id="nav">
+        <button type="button" class="nav-btn active" data-view="chat">Sohbet</button>
+        <button type="button" class="nav-btn" data-view="evolve">Evolution</button>
+        <button type="button" class="nav-btn" data-view="systems">Sistemler</button>
+        <button type="button" class="nav-btn" data-view="ops">Operasyon</button>
       </nav>
 
-      <div class="rail-foot">
-        <div class="pill" id="sysPill">—</div>
-        <div class="mono" id="modelLine">modeller yükleniyor…</div>
+      <div class="quick">
+        <p class="section-label">Hızlı ateş</p>
+        <button type="button" class="qbtn" data-cmd="Kendini analiz et, eksiklerini bul, daha hızlı ve daha sağlam hale gel, gerekli özellikleri geliştir, güncel teknik bilgileri kontrol et, değişiklikleri test et ve çalışan değişiklikleri uygula.">Full Evolve</button>
+        <button type="button" class="qbtn" data-cmd="Kendini analiz et.">Diagnose</button>
+        <button type="button" class="qbtn" data-cmd="/boot">Reboot Systems</button>
+        <button type="button" class="qbtn" data-cmd="Daha hızlı cevap ver.">Turbo Mode</button>
+        <button type="button" class="qbtn" data-cmd="Masaüstümü düzenle.">Desktop</button>
+        <button type="button" class="qbtn" data-cmd="Bilgisayarımı kontrol et.">System Check</button>
+        <button type="button" class="qbtn" data-cmd="Bu projeyi kendin test et.">Self Test</button>
+      </div>
+
+      <div class="rail-status">
+        <div class="live"><span class="dot" id="liveDot"></span><span id="liveLabel">bağlanıyor</span></div>
+        <div class="mono" id="sysPill">—</div>
       </div>
     </aside>
 
-    <main class="stage">
-      <header class="top">
+    <main class="main">
+      <header class="topbar">
         <div>
-          <p class="eyebrow">Windows 11 · Ollama · Self-Evolution</p>
-          <h2 class="headline" id="headline">REIS AI</h2>
+          <p class="eyebrow" id="eyebrow">Command Center</p>
+          <h2 class="title" id="viewTitle">Sohbet</h2>
         </div>
-        <div class="top-meta">
-          <span class="dot" id="liveDot" title="bağlantı"></span>
-          <span id="liveLabel">bağlanıyor</span>
+        <div class="meters" id="meters">
+          <div class="meter"><span>CPU</span><b id="mCpu">—</b></div>
+          <div class="meter"><span>RAM</span><b id="mRam">—</b></div>
+          <div class="meter"><span>Boot</span><b id="mBoot">—</b></div>
+          <div class="meter"><span>Err</span><b id="mErr">—</b></div>
         </div>
       </header>
 
-      <section class="chat" id="chat" aria-live="polite"></section>
+      <!-- CHAT -->
+      <section class="view active" id="view-chat">
+        <div class="model-strip" id="modelStrip"></div>
+        <div class="chat" id="chat" aria-live="polite"></div>
+        <form class="composer" id="form">
+          <textarea id="input" rows="1" placeholder="Komut veya hedef yaz… Enter gönder, Shift+Enter satır"></textarea>
+          <div class="composer-actions">
+            <button type="button" class="ghost" id="clearChat">Temizle</button>
+            <button type="submit" class="send" id="send">Gönder</button>
+          </div>
+        </form>
+      </section>
 
-      <form class="composer" id="form">
-        <label class="sr-only" for="input">Mesaj</label>
-        <textarea id="input" rows="1" placeholder="Hedef yaz… örn. Kendini geliştir." autocomplete="off"></textarea>
-        <button type="submit" id="send" class="send">Gönder</button>
-      </form>
+      <!-- EVOLVE -->
+      <section class="view" id="view-evolve">
+        <div class="panel-grid">
+          <article class="glass card">
+            <h3>Self-Evolution</h3>
+            <p class="muted">Diagnostics → Plan → Patch → Review → Test → Benchmark → Commit</p>
+            <button type="button" class="send wide" id="runEvolve">Evolve şimdi</button>
+            <pre class="log" id="evolveLog">Hazır.</pre>
+          </article>
+          <article class="glass card">
+            <h3>Diagnostics özeti</h3>
+            <div class="stat-row"><span>Python dosyası</span><b id="dFiles">—</b></div>
+            <div class="stat-row"><span>Sorun</span><b id="dProblems">—</b></div>
+            <div class="stat-row"><span>Test gap</span><b id="dGaps">—</b></div>
+            <div class="stat-row"><span>Güvenlik</span><b id="dSec">—</b></div>
+            <button type="button" class="ghost wide" id="runDiagnose">Tara</button>
+          </article>
+        </div>
+      </section>
+
+      <!-- SYSTEMS -->
+      <section class="view" id="view-systems">
+        <div class="systems-grid" id="systemsGrid"></div>
+      </section>
+
+      <!-- OPS -->
+      <section class="view" id="view-ops">
+        <div class="panel-grid">
+          <article class="glass card">
+            <h3>Donanım paketi</h3>
+            <ul class="kit" id="kitList"></ul>
+          </article>
+          <article class="glass card">
+            <h3>Telegram</h3>
+            <p class="muted" id="tgStatus">Kontrol ediliyor…</p>
+            <p class="mono small">Token yalnızca .env — asla sohbete yazma</p>
+          </article>
+          <article class="glass card">
+            <h3>Projeler</h3>
+            <div class="list" id="projectList">—</div>
+          </article>
+          <article class="glass card">
+            <h3>Görevler</h3>
+            <div class="list" id="taskList">—</div>
+          </article>
+        </div>
+      </section>
     </main>
   </div>
 
