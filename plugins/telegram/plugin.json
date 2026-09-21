@@ -1,0 +1,9 @@
+{
+  "name": "telegram",
+  "version": "1.0.0",
+  "enabled": true,
+  "description": "REIS AI Telegram bot. Token TELEGRAM_BOT_TOKEN ile .env'den okunur.",
+  "permissions": ["network"],
+  "risk": "HIGH",
+  "entry": "core.telegram_bot"
+}

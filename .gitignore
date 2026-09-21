@@ -1,0 +1,61 @@
+# Secrets & env
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+**/secrets*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg
+dist/
+build/
+*.spec.bak
+
+# App / runtime data
+logs/
+backups/
+cache/
+memory/
+database/*.db
+database/*.db-*
+workspace/
+projects/
+
+# Large installers / binaries
+OllamaSetup.exe
+*.exe
+!dist/REIS_AI/REIS_AI.exe
+
+# Actually keep dist out entirely (already in dist/)
+# Ignore accidental desktop copy helpers clutter if huge
+Masaustune
+
+# IDE / OS
+.idea/
+.vscode/
+.cursor/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Test sandboxes
+tests/_evo_sandbox.py
+tests/_heal_sandbox.py
+logs/_generated_smoke.py
+
+# PyInstaller leftovers
+*.toc
+*.pkg
+*.pyz

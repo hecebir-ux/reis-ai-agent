@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>REIS AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <div class="shell">
+    <aside class="rail">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1 class="brand-name">REIS AI</h1>
+          <p class="brand-tag">Local Autonomous Agent</p>
+        </div>
+      </div>
+
+      <nav class="actions" aria-label="Hızlı işlemler">
+        <button type="button" class="act" data-cmd="Kendini analiz et, eksiklerini bul, daha hızlı ve daha sağlam hale gel, gerekli özellikleri geliştir, güncel teknik bilgileri kontrol et, değişiklikleri test et ve çalışan değişiklikleri uygula.">
+          <span class="act-k">Evolve</span>
+          <span class="act-d">Kendini geliştir</span>
+        </button>
+        <button type="button" class="act" data-cmd="Kendini analiz et.">
+          <span class="act-k">Diagnose</span>
+          <span class="act-d">Kodunu tara</span>
+        </button>
+        <button type="button" class="act" data-cmd="/boot">
+          <span class="act-k">Boot</span>
+          <span class="act-d">Sistemleri aç</span>
+        </button>
+        <button type="button" class="act" data-cmd="Daha hızlı cevap ver.">
+          <span class="act-k">Faster</span>
+          <span class="act-d">Hız modeli</span>
+        </button>
+        <button type="button" class="act" data-cmd="Masaüstümü düzenle.">
+          <span class="act-k">Desktop</span>
+          <span class="act-d">Düzenle (dry-run)</span>
+        </button>
+        <button type="button" class="act" data-cmd="Bilgisayarımı kontrol et.">
+          <span class="act-k">System</span>
+          <span class="act-d">Ortam raporu</span>
+        </button>
+      </nav>
+
+      <div class="rail-foot">
+        <div class="pill" id="sysPill">—</div>
+        <div class="mono" id="modelLine">modeller yükleniyor…</div>
+      </div>
+    </aside>
+
+    <main class="stage">
+      <header class="top">
+        <div>
+          <p class="eyebrow">Windows 11 · Ollama · Self-Evolution</p>
+          <h2 class="headline" id="headline">REIS AI</h2>
+        </div>
+        <div class="top-meta">
+          <span class="dot" id="liveDot" title="bağlantı"></span>
+          <span id="liveLabel">bağlanıyor</span>
+        </div>
+      </header>
+
+      <section class="chat" id="chat" aria-live="polite"></section>
+
+      <form class="composer" id="form">
+        <label class="sr-only" for="input">Mesaj</label>
+        <textarea id="input" rows="1" placeholder="Hedef yaz… örn. Kendini geliştir." autocomplete="off"></textarea>
+        <button type="submit" id="send" class="send">Gönder</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
