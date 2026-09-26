@@ -120,6 +120,13 @@ def main() -> int:
                 return 1
         else:
             bot = TelegramBot(token=token, handler=make_agent_handler(agent))
+            try:
+                from core.agent_core.core import ReisAgentCore
+                from core.agent_core.telegram_runtime import build_bridge
+
+                bot.bridge = build_bridge(bot, ReisAgentCore(agent=agent))
+            except Exception as _bridge_err:  # keep bot working even if bridge fails
+                print(f"Agent Core bridge kurulamadı: {_bridge_err}")
             if args.telegram and not want_ui:
                 bot.run_forever()
                 return 0
