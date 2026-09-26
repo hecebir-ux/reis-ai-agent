@@ -66,9 +66,11 @@ class TelegramAgentBridge:
 
     def handle(self, chat_id: int, text: str) -> Optional[threading.Thread]:
         mode = self.core.classify_mode(text)
+        print(f"[REIS][telegram] chat={chat_id} mode={mode} text={text!r}", flush=True)
         if mode == MODE_CHAT:
             result = self.core.run(text)
             self.send(chat_id, result.get("message") or "(boş yanıt)")
+            print(f"[REIS][telegram] chat={chat_id} chat-reply gönderildi", flush=True)
             return None
         return self._run_task(chat_id, text)
 
@@ -96,6 +98,11 @@ class TelegramAgentBridge:
                     self.send(chat_id, final)
                 except Exception:
                     pass
+            print(
+                f"[REIS][telegram] chat={chat_id} görev bitti ok={result.get('ok')} "
+                f"mode={result.get('mode')}",
+                flush=True,
+            )
             return result
 
         if self.run_async:
