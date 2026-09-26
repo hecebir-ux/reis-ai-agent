@@ -15,11 +15,13 @@ Design goals from the REIS AI spec:
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 import config
 from core.agent.loop import ReisMaxAgent
 from core.agent_core.capabilities import CapabilityRegistry
+from core.agent_core.error_memory import ErrorMemory
 from core.agent_core.events import (
     CHAT,
     CODE,
@@ -27,6 +29,7 @@ from core.agent_core.events import (
     EXECUTE,
     EventBus,
     EventSink,
+    HEAL,
     INTENT,
     PLAN,
     REPORT,
@@ -34,6 +37,13 @@ from core.agent_core.events import (
     TEST,
     UNDERSTAND,
     VERIFY,
+)
+from core.agent_core.retry import RetryEngine, RetryPolicy
+from core.agent_core.tasks import (
+    STATUS_BLOCKED,
+    STATUS_COMPLETED,
+    TaskLedger,
+    evaluate_gate,
 )
 from core.evolution.intents import match_evolution_intent
 from core.llm_client import OllamaClient
@@ -44,6 +54,28 @@ MODE_CHAT = "chat"
 MODE_AGENT = "agent"
 MODE_CAPABILITY = "capability"
 MODE_SELF = "self"
+MODE_STATUS = "status"
+
+# Modes that run as long background tasks (stream progress); others reply once.
+BACKGROUND_MODES = {MODE_AGENT, MODE_SELF}
+
+# Free-text triggers asking about an existing task's status.
+_STATUS_TRIGGERS = (
+    "görev ne durumda",
+    "gorev ne durumda",
+    "görev durumu",
+    "gorev durumu",
+    "task durumu",
+    "task status",
+    "son görev",
+    "son gorev",
+    "hangi durumda",
+    "görev nerede",
+    "gorev nerede",
+)
+
+# Capabilities a real engineering task cannot run without.
+_REQUIRED_FOR_AGENT = ("python", "filesystem", "terminal", "ollama_server")
 
 # Free-text triggers that mean "tell me what you can do / your status".
 _CAPABILITY_TRIGGERS = (
@@ -102,12 +134,17 @@ class ReisAgentCore:
         self.agent = agent or ReisMaxAgent(llm)
         self.llm = self.agent.llm
         self.capabilities = CapabilityRegistry(self.llm)
+        self.ledger = TaskLedger(self.agent.store)
+        self.errors = ErrorMemory(self.agent.store)
+        self.retry = RetryEngine(RetryPolicy(max_attempts=1, base_delay=0.5))
 
     # ── Routing ──────────────────────────────────────────────────────────
     def classify_mode(self, text: str) -> str:
         t = (text or "").strip().lower()
         if not t:
             return MODE_CHAT
+        if any(k in t for k in _STATUS_TRIGGERS) or re.search(r"task_[0-9a-f]{6,}", t):
+            return MODE_STATUS
         if any(k in t for k in _CAPABILITY_TRIGGERS):
             return MODE_CAPABILITY
         if match_evolution_intent(text):
@@ -138,6 +175,8 @@ class ReisAgentCore:
         intent = self.agent.intent.classify(text)
         bus.emit(INTENT, f"{intent.primary} → {mode}", intent=intent.primary, mode=mode)
 
+        if mode == MODE_STATUS:
+            return self._run_status(text, bus)
         if mode == MODE_CAPABILITY:
             return self._run_capability(bus)
         if mode == MODE_SELF:
@@ -145,6 +184,22 @@ class ReisAgentCore:
         if mode == MODE_AGENT:
             return self._run_agent(text, bus, intent, approve)
         return self._run_chat(text, bus, intent)
+
+    # ── Task status query ────────────────────────────────────────────────
+    def _run_status(self, text: str, bus: EventBus) -> dict[str, Any]:
+        m = re.search(r"task_[0-9a-f]{6,}", text.lower())
+        task_id = m.group(0) if m else None
+        message = self.ledger.status_text(task_id)
+        bus.emit(REPORT, "durum raporu", level="success")
+        return {
+            "ok": True,
+            "mode": MODE_STATUS,
+            "message": message,
+            "events": [e.to_dict() for e in bus.history],
+        }
+
+    def task_status(self, task_id: Optional[str] = None) -> str:
+        return self.ledger.status_text(task_id)
 
     # ── Chat ─────────────────────────────────────────────────────────────
     def _run_chat(self, text: str, bus: EventBus, intent) -> dict[str, Any]:
@@ -228,10 +283,31 @@ class ReisAgentCore:
                 "events": [e.to_dict() for e in bus.history],
             }
 
+        task_id = self.ledger.open(text, intent=intent.primary, mode=MODE_AGENT)
+        bus.emit(INTENT, f"task {task_id}", task_id=task_id)
+
+        # Tool self-diagnostics + capability gap gate (section 6/7/20).
+        gap = self.preflight(bus)
+        if gap:
+            self.ledger.block(task_id, f"Eksik capability: {', '.join(gap)}", missing=gap)
+            bus.emit(REPORT, f"engellendi: eksik capability {', '.join(gap)}", level="error")
+            return {
+                "ok": False,
+                "mode": MODE_AGENT,
+                "task_id": task_id,
+                "status": STATUS_BLOCKED,
+                "message": (
+                    "⛔ Görev başlatılamadı. Gerekli capability eksik: "
+                    + ", ".join(gap)
+                    + ". Bunu kurup tekrar denerim."
+                ),
+                "events": [e.to_dict() for e in bus.history],
+            }
+
         self.agent.router.apply(decision.get("model_role", "coding"))
         bus.emit(PLAN, "adım adım plan çıkarılıyor")
+        self.ledger.log(task_id, "plan", "plan çıkarılıyor")
 
-        memory = Memory()
         phase_map = {
             "plan": PLAN,
             "setup": EXECUTE,
@@ -240,26 +316,73 @@ class ReisAgentCore:
             "test": TEST,
             "debug": DEBUG,
         }
-        original_add_step = memory.add_step
+        holder: dict[str, Any] = {"result": {}}
 
-        def hooked_add_step(sid, kind, msg, detail=None):  # emit live progress
-            original_add_step(sid, kind, msg, detail)
-            bus.emit(phase_map.get(kind, EXECUTE), (msg or "")[:180])
+        def _emit_step(kind: str, msg: str) -> None:
+            phase = phase_map.get(kind, EXECUTE)
+            bus.emit(phase, (msg or "")[:180])
+            self.ledger.log(task_id, phase, (msg or "")[:180])
 
-        memory.add_step = hooked_add_step  # type: ignore[method-assign]
+        def primary() -> dict[str, Any]:
+            memory = Memory()
+            original_add_step = memory.add_step
+
+            def hooked_add_step(sid, kind, msg, detail=None):
+                original_add_step(sid, kind, msg, detail)
+                _emit_step(kind, msg)
+
+            memory.add_step = hooked_add_step  # type: ignore[method-assign]
+            try:
+                res = self.agent.executor.run(text, memory)
+            finally:
+                memory.add_step = original_add_step  # type: ignore[method-assign]
+            holder["result"] = res
+            return {"ok": self.verify(res)["ok"], "result": res}
+
+        def alternative() -> dict[str, Any]:
+            # Autonomous retry via an alternative strategy: re-run the
+            # tester/debugger loop on the produced project once.
+            res = holder.get("result") or {}
+            pdir = res.get("project_dir")
+            if not pdir:
+                return {"ok": False}
+            bus.emit(HEAL, "alternatif düzeltme deneniyor")
+            self.ledger.log(task_id, HEAL, "alternatif düzeltme")
+            from core.debugger import Debugger
+            from core.tester import Tester
+
+            tester = Tester()
+            test = tester.detect_and_run(pdir)
+            if not test.get("success"):
+                # Skip a fix we already know fails for this error signature.
+                err_text = (test.get("stderr") or "") + (test.get("stdout") or "")
+                mem = Memory()
+                sid = mem.start_session("alt-fix")
+                Debugger(self.llm).auto_fix(sid, mem, pdir, test)
+                test = tester.detect_and_run(pdir)
+                if not test.get("success"):
+                    self.errors.record(err_text, fix="tester+debugger auto_fix", success=False)
+            res["final_test"] = test
+            holder["result"] = res
+            return {"ok": bool(test.get("success")), "result": res}
+
+        def _on_attempt(attempt) -> None:
+            self.ledger.set_retry(task_id, attempt.index)
+
         try:
-            result = self.agent.executor.run(text, memory)
+            self.retry.run([("primary", primary), ("alternative", alternative)], on_attempt=_on_attempt)
         except Exception as e:
             bus.emit(REPORT, f"yürütme hatası: {e}", level="error")
+            self.ledger.finalize(task_id, {"execution": False}, {"reason": str(e)}, message=str(e))
             return {
                 "ok": False,
                 "mode": MODE_AGENT,
+                "task_id": task_id,
                 "message": f"Görev sırasında hata: {type(e).__name__}: {e}",
                 "events": [e.to_dict() for e in bus.history],
             }
-        finally:
-            memory.add_step = original_add_step  # type: ignore[method-assign]
 
+        result = holder.get("result") or {}
         verification = self.verify(result)
         bus.emit(
             VERIFY,
@@ -267,7 +390,7 @@ class ReisAgentCore:
             level="success" if verification["ok"] else "warn",
             **verification,
         )
-        # Persist the project + task outcome through the existing agent plumbing.
+
         pdir = result.get("project_dir")
         if pdir:
             try:
@@ -278,19 +401,45 @@ class ReisAgentCore:
             except Exception:
                 pass
 
+        # FINAL VERIFICATION GATE (section 21).
+        checklist = {
+            "execution": verification["executed"],
+            "tests": verification["ran_test"],
+            "verification": verification["test_passed"],
+            "health": verification["ok"],
+        }
+        gate = self.ledger.finalize(task_id, checklist, verification, message=verification["reason"])
+        status = gate["status"]
+
+        if status != STATUS_COMPLETED:
+            ft = result.get("final_test") or {}
+            err_text = (ft.get("stderr") or "") + (ft.get("stdout") or "")
+            if err_text.strip():
+                self.errors.record(err_text, fix="executor loop", success=False, project=pdir)
+
         bus.emit(
             REPORT,
-            "tamamlandı" if verification["ok"] else "kısmen tamamlandı",
-            level="success" if verification["ok"] else "warn",
+            "tamamlandı" if status == STATUS_COMPLETED else "başarısız/kısmi",
+            level="success" if status == STATUS_COMPLETED else "warn",
         )
         return {
-            "ok": verification["ok"],
+            "ok": status == STATUS_COMPLETED,
             "mode": MODE_AGENT,
-            "message": self._format_agent_report(text, result, verification),
+            "task_id": task_id,
+            "status": status,
+            "message": self._format_agent_report(text, result, verification, task_id, checklist),
             "data": result,
             "verification": verification,
+            "checklist": checklist,
             "events": [e.to_dict() for e in bus.history],
         }
+
+    # ── Tool self-diagnostics / capability gap gate ──────────────────────
+    def preflight(self, bus: EventBus) -> list[str]:
+        bus.emit(SECURITY, "tool self-diagnostics")
+        caps = self.capabilities.scan(force=True)
+        gap = [name for name in _REQUIRED_FOR_AGENT if not caps.get(name) or not caps[name].available]
+        return gap
 
     # ── NO FAKE SUCCESS: verification gate ───────────────────────────────
     @staticmethod
@@ -319,23 +468,34 @@ class ReisAgentCore:
         }
 
     @staticmethod
-    def _format_agent_report(goal: str, result: dict[str, Any], verification: dict[str, Any]) -> str:
+    def _format_agent_report(
+        goal: str,
+        result: dict[str, Any],
+        verification: dict[str, Any],
+        task_id: str | None = None,
+        checklist: dict[str, bool] | None = None,
+    ) -> str:
         pdir = result.get("project_dir") or "-"
         ft = result.get("final_test") or {}
-        head = "✅ Tamamlandı" if verification["ok"] else "⚠️ Kısmen tamamlandı"
-        lines = [
-            f"{head}",
-            f"Görev: {goal}",
-            f"Proje: {pdir}",
-            f"Doğrulama: {verification['reason']}",
-        ]
+        head = "🟢 Görev tamamlandı" if verification["ok"] else "🔴 Görev başarısız"
+        lines = [head]
+        if task_id:
+            lines.append(f"🆔 {task_id}")
+        lines.append(f"• Görev: {goal[:120]}")
+        lines.append(f"• Proje: {pdir}")
+        if checklist:
+            marks = "  ".join(
+                f"{'✅' if checklist.get(k) else '❌'} {k}" for k in ("execution", "tests", "verification")
+            )
+            lines.append(f"• Kapı: {marks}")
+        lines.append(f"• Doğrulama: {verification['reason']}")
         if verification.get("strategy"):
-            lines.append(f"Test yöntemi: {verification['strategy']}")
+            lines.append(f"• Test yöntemi: {verification['strategy']}")
         out = (ft.get("stdout") or "").strip()
         if out:
-            lines.append("Çıktı: " + out[-300:])
+            lines.append("• Çıktı: " + out[-250:])
         if not verification["ok"]:
             err = (ft.get("stderr") or "").strip()
             if err:
-                lines.append("Hata: " + err[-300:])
+                lines.append("• Hata: " + err[-250:])
         return "\n".join(lines)

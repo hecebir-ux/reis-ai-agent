@@ -16,7 +16,7 @@ from __future__ import annotations
 import threading
 from typing import Any, Callable, Optional
 
-from core.agent_core.core import MODE_CHAT, ReisAgentCore
+from core.agent_core.core import BACKGROUND_MODES, ReisAgentCore
 from core.agent_core.events import AgentEvent, REPORT
 
 # Transport callables:
@@ -67,12 +67,14 @@ class TelegramAgentBridge:
     def handle(self, chat_id: int, text: str) -> Optional[threading.Thread]:
         mode = self.core.classify_mode(text)
         print(f"[REIS][telegram] chat={chat_id} mode={mode} text={text!r}", flush=True)
-        if mode == MODE_CHAT:
-            result = self.core.run(text)
-            self.send(chat_id, result.get("message") or "(boş yanıt)")
-            print(f"[REIS][telegram] chat={chat_id} chat-reply gönderildi", flush=True)
-            return None
-        return self._run_task(chat_id, text)
+        # Long-running work (real engineering / self-evolution) streams progress;
+        # chat, capability and status queries reply once.
+        if mode in BACKGROUND_MODES:
+            return self._run_task(chat_id, text)
+        result = self.core.run(text)
+        self.send(chat_id, result.get("message") or "(boş yanıt)")
+        print(f"[REIS][telegram] chat={chat_id} '{mode}' reply gönderildi", flush=True)
+        return None
 
     def _run_task(self, chat_id: int, text: str) -> Optional[threading.Thread]:
         renderer = ProgressRenderer()
