@@ -148,7 +148,8 @@ class SQLiteStore:
         if status:
             sql += " WHERE status = ?"
             args.append(status)
-        sql += " ORDER BY start_time DESC"
+        # rowid DESC breaks ties for tasks created within the same second.
+        sql += " ORDER BY start_time DESC, rowid DESC"
         with self._lock:
             con = self._connect()
             try:

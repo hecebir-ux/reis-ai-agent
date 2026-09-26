@@ -19,10 +19,14 @@ class TelegramBot:
         token: str | None = None,
         handler: Callable[[str, dict[str, Any]], str] | None = None,
         allowed_ids: set[int] | None = None,
+        bridge: Any | None = None,
     ):
         self.token = (token or getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
         self.api = f"https://api.telegram.org/bot{self.token}"
         self.handler = handler
+        # Optional REIS Agent Core bridge: when set, free-text messages are
+        # routed through the streaming agent loop instead of the plain handler.
+        self.bridge = bridge
         self.allowed_ids = allowed_ids if allowed_ids is not None else _parse_allowed()
         self.offset = 0
         self._stop = threading.Event()
@@ -56,6 +60,13 @@ class TelegramBot:
         if parse_mode:
             payload["parse_mode"] = parse_mode
         return self.api_call("sendMessage", **payload)
+
+    def edit_message(self, chat_id: int, message_id: int, text: str, parse_mode: str | None = None) -> dict[str, Any]:
+        text = (text or "")[:4000] or "…"
+        payload: dict[str, Any] = {"chat_id": chat_id, "message_id": message_id, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        return self.api_call("editMessageText", **payload)
 
     def _allowed(self, user_id: int | None) -> bool:
         if not self.allowed_ids:
@@ -110,6 +121,15 @@ class TelegramBot:
             text = "Kendini analiz et, eksiklerini bul ve geliştir."
         elif low.startswith("/diagnose"):
             text = "Kendini analiz et."
+
+        # Preferred path: stream through the REIS Agent Core bridge.
+        if self.bridge is not None:
+            try:
+                self.bridge.handle(chat_id, text)
+                return {"ok": True, "kind": "message", "bridged": True}
+            except Exception as e:
+                self.send_message(chat_id, f"Hata: {type(e).__name__}: {e}")
+                return {"ok": False, "kind": "message"}
 
         self.send_message(chat_id, "İşleniyor…")
         try:
